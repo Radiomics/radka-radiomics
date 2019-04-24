@@ -1,0 +1,38 @@
+Summary of functions and functionality
+
+To understand it better, assume we have the following example:
+Input image             (384, 384, 19)
+#Bins                   16
+Selected window size    5x5x5 
+Radius size             1
+
+GenerateInputRequestedRegion
+    Pads the ROI with the size of Radius [1,1,1]
+    Then 'crops the requested region'. I don't see any change in the size of the ROI  [384,384,19]
+    
+BeforeThreadedGenerateData
+    Allocates memory for the output images
+
+GenerateData (not really used, haven't spend the time to understand it 100%)
+    If the Threaded version is not used, then this method computes the textures. 
+    In this case they are computed using ScalarImageToCooccurrenceMatrixFilter and HistogramToTextureFeatuersFilters
+
+ThreadedGenerateData
+    This function is called by multiple threads, each thread receives a specific area of the output image to work with 
+    (outputRegionForThread)  -> For example (384,384,3)
+    It starts a 'face iterator', which will generate subareas of the initial region to make the computation. 
+            In my computer it generates 6 or 7 faces.
+    Then, for each 'face' it generates a neighborhood iterator to compute the textures. 
+    In this case  the size of this iterator is Radius (3,3,3) size (7,7,7) total size of 343
+    For each iteration of the neihborhood iterator:
+        Obtain a ROI that shoud be 'inside the image'. In 99.9% of the cases, this size is: (6, 6, 6) reducing the original window size by 1.
+        I'm assuming the few other cases happend when the ROI is exactly on the boundary of the mask. 
+        Obtain the min and max values for this new ROI
+        Compute the Texture features from this ROI (setting min and max values and number of bins)
+            The texture features are computed using 'ScalarImageToTextureFeatuersFilter' Not sure if this is correct, ITK examples used GLCM first
+
+AfterThreadedGenerateData
+    For each texture (7 in this case) they do:
+    Apply median filter with radius 1  (Using MedianImageFilter)
+    Rescale imge intensities from 0 to 255 
+    Compute std, kurtosis and skew (manually from the output data)
