@@ -169,7 +169,7 @@ P_glcm, angles = cMatrices.calculate_glcm(glcm_class.imageArray,
 P_glcm += P_glcm.copy().transpose((0, 2, 1, 3))
 
 # %%
-glcm_class.enabledFeatures = {k: True for k in ['JointEnergy', 'JointEntropy', 'Idm', 'Contrast', 'ClusterShade', 'ClusterProminence']}
+glcm_class.enabledFeatures = {k: True for k in ['JointEnergy', 'JointEntropy', 'Idm', 'Contrast', 'Correlation', 'ClusterShade', 'ClusterProminence']}
 
 pyrad_features = glcm_class.execute()
 
@@ -195,4 +195,69 @@ hist.Initialize(hist_size, (min_vox, min_vox), (max_vox, max_vox))
 for i in range(bins):
     for j in range(bins):
         hist.SetFrequencyOfIndex((i, j), int(P_glcm[0, i, j, 12]))
+
+# %%
+
+f_calculator = itk.HistogramToTextureFeaturesFilter[hist].New()
+f_calculator.SetInput(hist)
+
+f_calculator.Update()
+
+f_vec = {
+    'Energy': f_calculator.GetEnergy(),
+    'Correlation': f_calculator.GetCorrelation(),
+    'HaralickCorrelation': f_calculator.GetHaralickCorrelation(),
+    'Entropy': f_calculator.GetEntropy(),
+    'Contrast': f_calculator.GetInertia(),
+    'IDM': f_calculator.GetInverseDifferenceMoment(),
+    'ClusterProminence': f_calculator.GetClusterProminence(),
+    'ClusterShade': f_calculator.GetClusterShade()        
+}
+
+# %%
+
+energy = 0
+t_freq = float(hist.GetTotalFrequency())
+for i in range(bins**2):
+    a_freq = hist.GetFrequency(i)
+    r_freq = a_freq / t_freq
+    energy += r_freq ** 2
+    
+# %%
+    
+n_glcm = P_glcm[0, :, :, 12].copy()
+n_glcm /= np.sum(n_glcm)
+print(np.sum(n_glcm))
+
+p_ene = np.sum((n_glcm ** 2))
+
+# %%
+
+px = np.sum(n_glcm, axis=0)
+py = np.sum(n_glcm, axis=1)
+
+ux = np.mean(px)
+uy = np.mean(py)
+
+sx = np.std(px)
+sy = np.std(py)
+
+i = np.array(range(bins))
+j = i
+
+h_corr = np.sum(n_glcm * i[:, None] * j[None, :])
+h_corr = (h_corr - ux * uy) / (sx * sy)
+
+# %%
+
+u = np.sum(px * i)
+v = np.sum((i - u) * (i - u) * px)
+corr = np.sum((n_glcm * (i[:, None] - u) * (j[None, :] - u)) / (v ** 2))
+
+# %%
+
+u = np.sum(n_glcm * i[:, None])
+v = np.sum(n_glcm * (i[:, None] - u) * (j[:, None] - u))
+
+corr = np.sum((n_glcm * (i[:, None] - u) * (j[None, :] - u)) / (v ** 2))
 
