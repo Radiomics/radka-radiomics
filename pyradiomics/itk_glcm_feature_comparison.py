@@ -1,4 +1,5 @@
-import os
+
+import logging
 
 import itk
 import SimpleITK as sitk
@@ -7,7 +8,6 @@ import numpy as np
 import pandas as pd
 
 import radiomics
-import logging
 
 radiomics.setVerbosity(logging.DEBUG)
 
@@ -63,9 +63,11 @@ def get_feature_values(itk_glcm):
   return f_vec
 
 
-def get_itk_features(im_path, mask_path, bins=16):
+def main(testcase, bins=16):
+  im_path, ma_path = radiomics.getTestCase(testcase)
+
   s_im = sitk.ReadImage(im_path)
-  s_ma = sitk.ReadImage(mask_path)
+  s_ma = sitk.ReadImage(ma_path)
 
   im_arr = sitk.GetArrayFromImage(s_im)
   ma_arr = sitk.GetArrayFromImage(s_ma) == 1
@@ -185,10 +187,6 @@ def haralick_correlation(glcm_class):
 
 
 if __name__ == '__main__':
-  root = r'E:\Git-Repos\pyradiomics\data'
   test_case = 'brain1'
 
-  im_path = os.path.join(root, '%s_image.nrrd' % test_case)
-  ma_path = os.path.join(root, '%s_label.nrrd' % test_case)
-
-  get_itk_features(im_path, ma_path)
+  main(test_case)
