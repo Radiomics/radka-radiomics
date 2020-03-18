@@ -12,11 +12,16 @@ import numpy as np
 import SimpleITK as sitk
 import pandas as pd
 
+import tqdm
+import radiomics
+
+radiomics.progressReporter = tqdm.tqdm
+
 
 def normalizeArray(nparray, new_max):
     arr_min = np.min(nparray)
     arr_max = np.max(nparray)
-    return (nparray+arr_min)*(new_max / arr_max)
+    return (nparray-arr_min)*(new_max / arr_max)
 
 def normalizedImage(image, mask=None):
     im_arr = sitk.GetArrayFromImage(image).astype(float)
@@ -28,7 +33,7 @@ def normalizedImage(image, mask=None):
       arr_min = np.min(im_arr)
       arr_max = np.max(im_arr)
 
-    im_arr += arr_min
+    im_arr -= arr_min
     im_arr *= 256 / arr_max
     im = sitk.GetImageFromArray(im_arr.astype(int))
     im.CopyInformation(image)
@@ -43,7 +48,6 @@ def getTexture(image,mask,features):
 
 def pprint_dict(input_dict):
   print(json.dumps(input_dict, indent=2))
-
 
 
 imageFiles = ["subject0000.nrrd","subject0001.nrrd"]
@@ -62,7 +66,7 @@ import os
 import SimpleITK as sitk
 
 s = "0055"
-filePrefix = "/Users/fedorov/dropbox_partners/2019PW30/2019PW30-USF_radiomics/cleanedUp"
+filePrefix = "../cases"
 imageFile = os.path.join(filePrefix, "subject%s.nrrd" % s)
 maskFile = os.path.join(filePrefix, "subject%s ROI-1_%s.nrrd" % (s, maskTypes[subjects.index(s)]))
 wholeGlandMaskFile = os.path.join(filePrefix, "subject%s-WholeGland.nrrd" % s)
@@ -122,6 +126,8 @@ def _getKernelGenerator(self):
     kernelMask[tuple(kernelCoordinates.T)] = True
     kernelMask[idx] = True  # Also include center voxel
 
+    #print(np.sum(kernelMask))
+
     if self.masked:
       # Exclude voxels outside ROI
       kernelMask = numpy.logical_and(kernelMask, ROI_mask)
@@ -162,9 +168,11 @@ def _calculateVoxels(self):
     if enabled:
       self.featureValues[feature] = numpy.full(self.imageArray.shape, initValue, dtype='float')
 
+  self.progressReporter = tqdm.tqdm
+
   # Calculate the feature values for all enabled features
   with self.progressReporter(self.kernels, 'Calculating voxels') as bar:
-    for vox_idx, kernelMask in self.kernels:
+    for vox_idx, kernelMask in bar:
       self.maskArray = kernelMask
       self.labelledVoxelCoordinates = numpy.where(self.maskArray)
 
@@ -244,7 +252,7 @@ import six, numpy
 from radiomics import featureextractor, getFeatureClasses
 
 global SETTING_normalizationType
-SETTING_normalizationType = "global" # "kernel" or "global"
+SETTING_normalizationType = "kernel" # "kernel" or "global"
 extractor = featureextractor.RadiomicsFeatureExtractor(params)
 
 featureClasses = getFeatureClasses()
@@ -267,7 +275,7 @@ for featureName, featureValue in six.iteritems(featureVector):
   if isinstance(featureValue, sitk.Image):
     if featureMask == mask:
       featureFileName = os.path.join(filePrefix, "subject%s ROI-1_%s_%s_%s.nrrd" % (s, maskTypes[0], featureName, SETTING_normalizationType))
-    elif featureMask == woleGlandMask:
+    elif featureMask == wholeGlandMask:
       featureFileName = os.path.join(filePrefix, "subject%s ROI-WholeGland_%s_%s.nrrd" % (s, featureName, SETTING_normalizationType))
 
     sitk.WriteImage(featureValue, featureFileName)
