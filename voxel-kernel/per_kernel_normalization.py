@@ -16,7 +16,7 @@ import pandas as pd
 def normalizeArray(nparray, new_max):
     arr_min = np.min(nparray)
     arr_max = np.max(nparray)
-    return (nparray+arr_min)*(new_max / arr_max)
+    return (nparray-arr_min)*(new_max / arr_max)
 
 def normalizedImage(image, mask=None):
     im_arr = sitk.GetArrayFromImage(image).astype(float)
@@ -28,7 +28,7 @@ def normalizedImage(image, mask=None):
       arr_min = np.min(im_arr)
       arr_max = np.max(im_arr)
 
-    im_arr += arr_min
+    im_arr -= arr_min
     im_arr *= 256 / arr_max
     im = sitk.GetImageFromArray(im_arr.astype(int))
     im.CopyInformation(image)
