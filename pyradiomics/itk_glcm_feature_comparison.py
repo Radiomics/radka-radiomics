@@ -99,7 +99,7 @@ def main(testcase, bins=16):
   P_glcm += P_glcm.copy().transpose((0, 2, 1, 3))
 
   f_df = pd.DataFrame()
-  for a in range(1, P_glcm.shape[3]):
+  for a in range(P_glcm.shape[3]):
     itk_glcm = get_itk_glcm(P_glcm[0, :, :, a], min_vox, max_vox)
     f_vec = get_feature_values(itk_glcm)
     f_vec.name = a
