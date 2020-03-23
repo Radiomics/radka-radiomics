@@ -18,10 +18,23 @@ import radiomics
 radiomics.progressReporter = tqdm.tqdm
 
 
+def _alt_binEdges(parameterValues, **kwargs):
+  binCount = kwargs.get('binCount')
+
+  minimum = min(parameterValues)
+  maximum = max(parameterValues) + 1
+  binEdges = np.linspace(minimum, maximum, binCount + 1)
+
+  return binEdges
+
+
+radiomics.imageoperations.getBinEdges = _alt_binEdges
+
+
 def normalizeArray(nparray, new_max):
     arr_min = np.min(nparray)
     arr_max = np.max(nparray)
-    return (nparray-arr_min)*(new_max / arr_max)
+    return (nparray-arr_min)*(new_max / (arr_max - arr_min))
 
 def normalizedImage(image, mask=None):
     im_arr = sitk.GetArrayFromImage(image).astype(float)
@@ -29,12 +42,15 @@ def normalizedImage(image, mask=None):
       mask_arr = sitk.GetArrayFromImage(mask).astype(bool)
       arr_min = np.min(im_arr[mask_arr])
       arr_max = np.max(im_arr[mask_arr])
+
+      im_arr[~mask_arr] = arr_min  # results in non-masked voxels being 0 after normalization
     else:
       arr_min = np.min(im_arr)
       arr_max = np.max(im_arr)
 
     im_arr -= arr_min
-    im_arr *= 256 / arr_max
+    im_arr *= 256 / (arr_max - arr_min)
+
     im = sitk.GetImageFromArray(im_arr.astype(int))
     im.CopyInformation(image)
     return im
