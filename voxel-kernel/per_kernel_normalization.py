@@ -6,7 +6,7 @@ Email from Radka, Feb 3, 2020:
 (2) (local) Calculate the texture features in 128 bins in moving box of 5x5x5, where the intensities are normalized between 0 – 255 in the 5x5x5 box.
 """
 
-from radiomics import firstorder, shape, glcm
+from radiomics import firstorder, shape, glcm, logger
 import os, sys, json, six
 import numpy as np
 import SimpleITK as sitk
@@ -142,8 +142,6 @@ def _getKernelGenerator(self):
     kernelMask[tuple(kernelCoordinates.T)] = True
     kernelMask[idx] = True  # Also include center voxel
 
-    #print(np.sum(kernelMask))
-
     if self.masked:
       # Exclude voxels outside ROI
       kernelMask = numpy.logical_and(kernelMask, ROI_mask)
@@ -201,7 +199,6 @@ def _calculateVoxels(self):
         if success:  # Do not store results in case of an error
           self.featureValues[featureName][vox_idx] = featureValue
 
-      ### DEBUG ->
       """
       tempImage = sitk.GetImageFromArray(self.imageArray.astype(int))
       tempImage.CopyInformation(self.inputImage)
@@ -217,7 +214,6 @@ def _calculateVoxels(self):
 
       assert(False)
       """
-      ### DEBUG <-
 
   # Convert the output to simple ITK image objects
   for feature, enabled in six.iteritems(self.enabledFeatures):
@@ -266,6 +262,8 @@ pprint_dict(params)
 # Slicer does not like nan's - changed the default to 0!
 import six, numpy
 from radiomics import featureextractor, getFeatureClasses
+
+logger.setLevel(logging.DEBUG)
 
 global SETTING_normalizationType
 SETTING_normalizationType = "kernel" # "kernel" or "global"
