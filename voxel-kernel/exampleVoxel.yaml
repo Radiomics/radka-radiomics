@@ -13,6 +13,6 @@ setting:
 
 voxelSetting:
   kernelRadius: 2
-  maskedKernel: true
+  maskedKernel: false
   initValue: 0
   voxelBatch: 10000
