@@ -67,15 +67,30 @@ def kernel_iterator(im_path, ma_path, **kwargs):
         for z in range(size[2]):
           if ma.GetPixel((x, y, z)) > 0:
             # Masked pixel! Extract region
-            if x - radius < 0 or y - radius < 0 or z - radius < 0 or \
-              x + radius >= size[0] or y + radius >= size[1] or z >= size[2]:
-              raise Exception('index out of bounds')
             eif = itk.ExtractImageFilter[im, im].New()
             eif.SetInput(im)
 
             reg = itk.ImageRegion[3]()
-            reg.SetSize([radius * 2 + 1] * 3)
-            reg.SetIndex((x - radius, y - radius, z - radius))
+
+            if x - radius < 0 or y - radius < 0 or z - radius < 0 or \
+              x + radius >= size[0] or y + radius >= size[1] or z + radius >= size[2]:
+              #raise Exception('index out of bounds')
+              kernel_start = [x - radius, y - radius, z - radius]
+              kernel_size = [radius * 2 + 1] * 3
+
+              for d in range(3):
+                if kernel_start[d] < 0:
+                  kernel_size[d] += kernel_start[d]  # subtract number of voxels below 0
+                  kernel_start[d] = 0
+                if kernel_start[d] + kernel_size[d] >= size[d]:
+                  kernel_size[d] = size[d] - kernel_start[d]
+
+              reg.SetSize(kernel_size)
+              reg.SetIndex(kernel_start)
+            else:
+              reg.SetSize([radius * 2 + 1] * 3)
+              reg.SetIndex((x - radius, y - radius, z - radius))
+
             eif.SetExtractionRegion(reg)
             eif.Update()
 
@@ -99,4 +114,4 @@ if __name__ == "__main__":
 
   im_path = '../../cases/subject0055.nrrd'
   ma_path = '../../cases/subject0055-WholeGland.nrrd'
-  kernel_iterator(im_path, ma_path, binCount=16, kernelRadius=2, prefix='2_prostateX_0055-wholegland_5x5x5_')
+  kernel_iterator(im_path, ma_path, binCount=16, kernelRadius=2, prefix='prostateX_0055-wholegland_5x5x5_')

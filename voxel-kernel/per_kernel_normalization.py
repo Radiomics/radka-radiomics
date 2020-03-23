@@ -43,13 +43,13 @@ def normalizedImage(image, mask=None):
       arr_min = np.min(im_arr[mask_arr])
       arr_max = np.max(im_arr[mask_arr])
 
-      im_arr[~mask_arr] = arr_min  # results in non-masked voxels being 0 after normalization
+      #im_arr[~mask_arr] = arr_min  # results in non-masked voxels being 0 after normalization
     else:
       arr_min = np.min(im_arr)
       arr_max = np.max(im_arr)
 
     im_arr -= arr_min
-    im_arr *= 256 / (arr_max - arr_min)
+    im_arr *= 255 / (arr_max - arr_min)
 
     im = sitk.GetImageFromArray(im_arr.astype(int))
     im.CopyInformation(image)
