@@ -23,6 +23,18 @@ def _read_simpleitk_image_and_mask(im_path, ma_path):
   return s_im, s_ma
 
 
+def _compute_itk_min_max(im, ma):
+  lsif = itk.LabelStatisticsImageFilter[im, ma].New()
+  lsif.SetInput(im)
+  lsif.SetLabelInput(ma)
+  lsif.Update()
+
+  min_vox = int(lsif.GetMinimum(1))
+  max_vox = int(lsif.GetMaximum(1))
+
+  return min_vox, max_vox
+
+
 def _compute_min_max(s_im, s_ma):
   im_arr = sitk.GetArrayFromImage(s_im)
   ma_arr = sitk.GetArrayFromImage(s_ma) == 1
@@ -46,7 +58,7 @@ def _compute_pyrad_glcm(s_im, s_ma, binCount=16, use_alt_discretization=True):
       # Then, use numpy.histogram_bin_edges to get the bin edges (consistent with PyRadiomics behaviour)
       temp_vals = parameterValues.copy()
       temp_vals[temp_vals == max(temp_vals)] += 1
-      edges = np.histogram_bin_edges(temp_vals, binCount)
+      edges = np.histogram(temp_vals, binCount)[1]
 
       # Method 2 (Closer to ITK)
       # Compute the min and max in the image, and add 1 to the maximum
@@ -106,7 +118,8 @@ def main(testcase, bins=16, match_discretization=True):
   s_im, s_ma = _read_simpleitk_image_and_mask(im_path, ma_path)
 
   # compute min and maximum in the image (needed for ITK)
-  min_vox, max_vox = _compute_min_max(s_im, s_ma)
+  #min_vox, max_vox = _compute_min_max(s_im, s_ma)
+  min_vox, max_vox = _compute_itk_min_max(im, ma)
 
   # Get the PyRadiomics results
   P_glcm, angles = _compute_pyrad_glcm(s_im, s_ma, bins, match_discretization)
