@@ -107,6 +107,64 @@ def kernel_iterator(im_path, ma_path, **kwargs):
     sitk.WriteImage(fmap_im, '%s%s_fmap.nrrd' % (prefix, f))
 
 
+def kernel_iterator_INCORRECT(im_path, ma_path, **kwargs):
+  global FEATURES
+
+  im, ma = itk_read_image_and_mask(im_path, ma_path)
+  s_im = sitk.ReadImage(im_path)
+
+  radius = kwargs.get('kernelRadius', 1)
+
+  # Slow slow slow function!
+  buffered_region = ma.GetBufferedRegion()
+  size = [buffered_region.GetIndex(3), buffered_region.GetIndex(4), buffered_region.GetIndex(5)]
+
+  output_array = np.zeros(size + [6], dtype='float')
+  with tqdm.tqdm(range(size[0]), desc='x') as bar:
+    for x in bar:
+      for y in range(size[1]):
+        for z in range(size[2]):
+          if ma.GetPixel((x, y, z)) > 0:
+            # Masked pixel! Extract region
+            eif = itk.ExtractImageFilter[im, im].New()
+            eif.SetInput(im)
+
+            reg = itk.ImageRegion[3]()
+
+            kernel_start = [x - radius, y - radius, z - radius]
+            kernel_last = [x + radius, y + radius, z + radius]
+            kernel_size = [1, 1, 1]
+
+            for d in range(3):
+              if kernel_start[d] < 0:
+                kernel_start[d] = 0
+              # The next part of code mimics the C-code:
+              # https://github.com/Radiomics/radka-radiomics/blob/master/include/itkHaralickTextureFeaturesImageFilter.cpp#L1040-L1041
+              # This results in sizes being 1 smaller than intended (as size is UBound - LBound + 1, not UBound - LBound)
+              if kernel_last[d] >= size[d]:
+                kernel_size[d] = size[d] - 1 - kernel_start[d]
+              else:
+                kernel_size[d] = kernel_last[d] - kernel_start[d]
+
+            reg.SetSize(kernel_size)
+            reg.SetIndex(kernel_start)
+
+            eif.SetExtractionRegion(reg)
+            eif.Update()
+
+            e_im = eif.GetOutput()
+            fvec = itk_alt_compute_glcm_features(e_im, None, **kwargs)
+            output_array[x, y, z] = fvec
+
+  prefix = kwargs.get('prefix', '')
+  for f_idx, f in enumerate(FEATURES):
+    fmap = output_array[:, :, :, f_idx].transpose((2, 1, 0))
+    fmap_im = sitk.GetImageFromArray(fmap)
+    fmap_im.CopyInformation(s_im)
+
+    sitk.WriteImage(fmap_im, '%s%s_fmap.nrrd' % (prefix, f))
+
+
 if __name__ == "__main__":
   #from radiomics import getTestCase
   #im_path, ma_path = getTestCase('brain1')
@@ -114,4 +172,4 @@ if __name__ == "__main__":
 
   im_path = '../../cases/subject0055.nrrd'
   ma_path = '../../cases/subject0055-WholeGland.nrrd'
-  kernel_iterator(im_path, ma_path, binCount=16, kernelRadius=2, prefix='prostateX_0055-wholegland_5x5x5_')
+  kernel_iterator_INCORRECT(im_path, ma_path, binCount=16, kernelRadius=3, prefix='prostateX_0055-wholegland_6x6x6_')
