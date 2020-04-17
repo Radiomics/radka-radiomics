@@ -8,70 +8,13 @@ Email from Radka, Feb 3, 2020:
 
 from radiomics import firstorder, shape, glcm, logger
 import os, sys, json, six
-import numpy as np
+import numpy
 import SimpleITK as sitk
 import pandas as pd
 
 
-def normalizeArray(nparray, new_max):
-    arr_min = np.min(nparray)
-    arr_max = np.max(nparray)
-    return (nparray-arr_min)*(new_max / arr_max)
-
-def normalizedImage(image, mask=None):
-    im_arr = sitk.GetArrayFromImage(image).astype(float)
-    if mask is not None:
-      mask_arr = sitk.GetArrayFromImage(mask).astype(bool)
-      arr_min = np.min(im_arr[mask_arr])
-      arr_max = np.max(im_arr[mask_arr])
-    else:
-      arr_min = np.min(im_arr)
-      arr_max = np.max(im_arr)
-
-    im_arr -= arr_min
-    im_arr *= 256 / arr_max
-    im = sitk.GetImageFromArray(im_arr.astype(int))
-    im.CopyInformation(image)
-    return im
-
-def getTexture(image,mask,features):
-    settings = {"voxelBased": True, "kernelRadius": 2, "binCount": 128}
-    gf = glcm.RadiomicsGLCM(image, mask, **settings)
-    for f in features:
-        gf.enableFeatureByName(f, True)
-    return gf.execute()
-
 def pprint_dict(input_dict):
   print(json.dumps(input_dict, indent=2))
-
-
-
-imageFiles = ["subject0000.nrrd","subject0001.nrrd"]
-subjects = ["0000", "0001","0015","0026","0055"]
-maskTypes = ["T_PZ", "F_TZ","T_TZ","T_TZ","T_TZ"]
-#maskFileSuffixes = ["subject0000 ROI-1_T_PZ.nrrd", "subject0001 ROI-1_F_TZ.nrrd"]
-
-usfValues = []
-prValues = []
-subjectValues = []
-featureTypes = []
-
-
-
-import os
-import SimpleITK as sitk
-
-s = "0055"
-filePrefix = "/Users/fedorov/dropbox_partners/2019PW30/2019PW30-USF_radiomics/cleanedUp"
-imageFile = os.path.join(filePrefix, "subject%s.nrrd" % s)
-maskFile = os.path.join(filePrefix, "subject%s ROI-1_%s.nrrd" % (s, maskTypes[subjects.index(s)]))
-wholeGlandMaskFile = os.path.join(filePrefix, "subject%s-WholeGland.nrrd" % s)
-image = sitk.ReadImage(imageFile)
-
-mask = sitk.ReadImage(maskFile)
-wholeGlandMask = sitk.ReadImage(wholeGlandMaskFile)
-
-
 
 # inject functions from https://github.com/Radiomics/pyradiomics/pull/337,
 # adding imports
@@ -137,13 +80,8 @@ def _getKernelGenerator(self):
 # redefine _calculateVoxels
 import copy
 def _calculateVoxels(self):
-
   initValue = self.settings.get('initValue', 0)
   self.kernels = self._getKernelGenerator()
-
-  #print("Before the loop")
-  #tempImageArray = sitk.GetArrayFromImage(self.inputImage)[numpy.where(self.maskArray)]
-  #print(str(tempImageArray))
 
   # per-kernel normalization
   if SETTING_normalizationType == "global":
@@ -177,22 +115,6 @@ def _calculateVoxels(self):
         if success:  # Do not store results in case of an error
           self.featureValues[featureName][vox_idx] = featureValue
 
-      """
-      tempImage = sitk.GetImageFromArray(self.imageArray.astype(int))
-      tempImage.CopyInformation(self.inputImage)
-      sitk.WriteImage(tempImage, "binned_image.nrrd")
-      print("Min: {} Max: {}".format(self.imageArray[numpy.where(self.maskArray)].min(), self.imageArray[numpy.where(self.maskArray)].max()))
-
-      sitk.WriteImage(self.inputImage, "original_image.nrrd")
-      print("Min: {} Max: {}".format(sitk.GetArrayFromImage(self.inputImage)[numpy.where(self.maskArray)].min(), sitk.GetArrayFromImage(self.inputImage)[numpy.where(self.maskArray)].max()))
-
-      tempImage = sitk.GetImageFromArray(self.maskArray.astype(int))
-      tempImage.CopyInformation(self.inputImage)
-      sitk.WriteImage(tempImage, "mask_image.nrrd")
-
-      assert(False)
-      """
-
   # Convert the output to simple ITK image objects
   for feature, enabled in six.iteritems(self.enabledFeatures):
     if enabled:
@@ -200,77 +122,88 @@ def _calculateVoxels(self):
       self.featureValues[feature].CopyInformation(self.inputImage)
 
 
-from radiomics import base
-base.RadiomicsFeaturesBase._calculateVoxels = _calculateVoxels
-base.RadiomicsFeaturesBase._getKernelGenerator = _getKernelGenerator
+def process(args_in):
+  import argparse, logging
 
+  parser = argparse.ArgumentParser(usage="%(prog)s input_mask input_image")
+  parser.add_argument("-i", "--image", required=True, help="Input image for feature extraction", dest="input_image")
+  parser.add_argument("-m", "--mask", required=True, help="Input image for feature extraction", dest="input_mask")
+  parser.add_argument("-n", "--normalization", choices=["kernel","global"], dest="normalization_type", default="kernel")
+  parser.add_argument("-b", "--bins", type=int, dest="bin_count", default=16)
+  parser.add_argument("-l", "--mask_label", type=int, dest="mask_label", default=1)
+  parser.add_argument("-r", "--kernel_radius", type=int, dest="kernel_radius", default=2)
+  parser.add_argument("-t", "--force2D", type=bool, dest="force_2D", default=True)
+  parser.add_argument("-k", "--masked_kernel", type=bool, dest="masked_kernel", default=True)
+  parser.add_argument("-f", "--feature", type=str, default="JointEntropy", dest="feature")
 
+  args = parser.parse_args()
 
-# load parameters from file (from featureexractor.py)
-# TODO: to add a static method to do this?
+  from radiomics import base
+  base.RadiomicsFeaturesBase._calculateVoxels = _calculateVoxels
+  base.RadiomicsFeaturesBase._getKernelGenerator = _getKernelGenerator
 
-paramsFile = os.path.abspath(r'exampleVoxel.yaml')
+  # based on helloVoxel.py example from pyradiomics
+  parameters = \
+  {
+    "imageType": {
+      "Original": {}
+    },
+    "featureClass": {
+      "glcm": [args.feature]
+    },
+    "setting": {
+      "binCount": args.bin_count,
+      "force2D": args.force_2D,
+      "label": args.mask_label
+    },
+    "voxelSetting": {
+      "kernelRadius": args.kernel_radius,
+      "maskedKernel": args.masked_kernel,
+      # Slicer does not like nan's - changed the default to 0!
+      "initValue": 0
+    }
+  }
 
-# Ensure pykwalify.core has a log handler (needed when parameter validation fails)
-global logger
-import pykwalify, logging
-from radiomics import getParameterValidationFiles
+  print("Normalization: %s" % args.normalization_type)
 
-if len(pykwalify.core.log.handlers) == 0 and len(logging.getLogger().handlers) == 0:
-  # No handler available for either pykwalify or root logger, provide first radiomics handler (outputs to stderr)
-  pykwalify.core.log.addHandler(logging.getLogger('radiomics').handlers[0])
+  pprint_dict(parameters)
 
-schemaFile, schemaFuncs = getParameterValidationFiles()
-c = pykwalify.core.Core(source_file=paramsFile, source_data=None,
-                        schema_files=[schemaFile], extensions=[schemaFuncs])
-params = c.validate()
+  try:
+    image = sitk.ReadImage(args.input_image)
+    mask = sitk.ReadImage(args.input_mask)
+  except:
+    print("Fatal error: failed to read input image or mask")
+    return
 
-if "binWidth" in params["setting"].keys():
-  del params["setting"]["binWidth"]
-if "voxelBatch" in params["voxelSetting"].keys():
-  del params["voxelSetting"]["voxelBatch"]
+  import six, numpy
+  from radiomics import featureextractor, getFeatureClasses
 
-params["setting"]["binCount"] = 16
-params["featureClass"]["glcm"] = ["Contrast"]
+  logger.setLevel(logging.DEBUG)
 
-pprint_dict(params)
+  global SETTING_normalizationType
+  SETTING_normalizationType = args.normalization_type # "kernel" or "global"
+  extractor = featureextractor.RadiomicsFeatureExtractor(parameters)
 
+  featureClasses = getFeatureClasses()
 
-# based on helloVoxel.py example
-# Slicer does not like nan's - changed the default to 0!
-import six, numpy
-from radiomics import featureextractor, getFeatureClasses
+  for cls, features in six.iteritems(extractor.enabledFeatures):
+    if features is None or len(features) == 0:
+      features = [f for f, deprecated in six.iteritems(featureClasses[cls].getFeatureNames()) if not deprecated]
+    for f in features:
+      print(getattr(featureClasses[cls], 'get%sFeatureValue' % f).__doc__)
 
-logger.setLevel(logging.DEBUG)
+  print("Calculating features")
 
-global SETTING_normalizationType
-SETTING_normalizationType = "kernel" # "kernel" or "global"
-extractor = featureextractor.RadiomicsFeatureExtractor(params)
+  featureVector = extractor.execute(image, mask, voxelBased=True)
 
-featureClasses = getFeatureClasses()
+  for featureName, featureValue in six.iteritems(featureVector):
+    if isinstance(featureValue, sitk.Image):
+      featureFileName = "%s_%s_%s.nrrd" % (os.path.split(args.input_image)[1], featureName, args.normalization_type)
 
-print("Active features:")
-for cls, features in six.iteritems(extractor.enabledFeatures):
-  if features is None or len(features) == 0:
-    features = [f for f, deprecated in six.iteritems(featureClasses[cls].getFeatureNames()) if not deprecated]
-  for f in features:
-    print(f)
-    print(getattr(featureClasses[cls], 'get%sFeatureValue' % f).__doc__)
+      sitk.WriteImage(featureValue, featureFileName)
+      print('Computed %s, stored as "%s"' % (featureName, featureFileName))
+    else:
+      print('%s: %s' % (featureName, featureValue))
 
-print("Calculating features")
-
-featureMask = wholeGlandMask
-featureVector = extractor.execute(image, featureMask, voxelBased=True)
-
-### save feature imageShape
-for featureName, featureValue in six.iteritems(featureVector):
-  if isinstance(featureValue, sitk.Image):
-    if featureMask == mask:
-      featureFileName = os.path.join(filePrefix, "subject%s ROI-1_%s_%s_%s.nrrd" % (s, maskTypes[0], featureName, SETTING_normalizationType))
-    elif featureMask == wholeGlandMask:
-      featureFileName = os.path.join(filePrefix, "subject%s ROI-WholeGland_%s_%s.nrrd" % (s, featureName, SETTING_normalizationType))
-
-    sitk.WriteImage(featureValue, featureFileName)
-    print('Computed %s, stored as "%s"' % (featureName, featureFileName))
-  else:
-    print('%s: %s' % (featureName, featureValue))
+if __name__ == '__main__':
+  process(sys.argv)
